@@ -1,0 +1,20 @@
+import express from "express"
+import auth from "./routes/auth.route.js"
+import dotenv from "dotenv"
+
+dotenv.config();
+
+const app = express();
+
+const PORT = process.env.PORT || 8000;
+
+
+app.use("/api/auth",auth)
+
+app.listen(PORT , ()=>{
+   console.log(`server has started and is listening in port NO. : ${PORT}`)
+}) 
+
+app.get("/",(req,res)=>{
+   res.send(`<h1> This is homepage, response from server hance the server is up and running <h1/>`)
+})
