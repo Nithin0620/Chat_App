@@ -1,6 +1,6 @@
 import mongoose from "mongoose"
-import {mailTamplet} from "../tamplet/mailTamplet.js"
-import {sendEmail} from "../utility/mailSender.js"
+import mailTamplet from "../tamplet/mailTamplet.js"
+import sendEmail from "../utility/mailSender.js"
 
 
 const otpSchema = new mongoose.Schema({
@@ -43,5 +43,6 @@ otpSchema.pre("save",async function(next){
    next();
 })
 
+const Otp = mongoose.model("Otp",otpSchema);
 
-module.exports = mongoose.model("Otp",otpSchema);
+export default Otp;

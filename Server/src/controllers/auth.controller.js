@@ -1,8 +1,10 @@
 import { profile } from "console";
-import user from "../models/user.js";
+import User from "../models/user.js";
+import Otp from "../models/otp.js";
 import bcrypt from "bcrypt";
-import otpGenerator from "otp-generator"
-import jwt from "jsonwebtoken"
+import otpGenerator from "otp-generator";
+import cloudinary from "../configuration/cloudinary.js";
+import jwt from "jsonwebtoken";
 
 export const signup = async (req, res) => {
   try {
@@ -14,6 +16,7 @@ export const signup = async (req, res) => {
         message: "Please Enter Otp.",
       });
     }
+    console.log(req.body);
     if (!fullName || !email || !mobileNo || !password || !confirmPassword) {
       return res.status(400).json({
         success: false,
@@ -33,15 +36,20 @@ export const signup = async (req, res) => {
       });
     }
 
-    const recentOtp = await otp
-      .findOne({ email: email })
+    const recentOtp = await Otp.findOne({ email: email })
       .sort({ createdAt: -1 })
-      .limit(1);
-    if (recentOtp.length === 0) {
+    ;
+    if (!recentOtp) {
       return res.status(400).json({
         success: false,
         message: "Otp expired or not found",
       });
+    // }
+    // if (recentOtp.length === 0) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Otp expired or not found",
+    //   });
     } else {
       if (recentOtp.otp !== otp) {
         return res.status(400).json({
@@ -51,7 +59,7 @@ export const signup = async (req, res) => {
       }
     }
 
-    const user = await user.findOne({ email });
+    const user = await User.findOne({ email });
     if (user) {
       return res.status(400).json({
         success: false,
@@ -67,7 +75,7 @@ export const signup = async (req, res) => {
       mobileNo,
       image: `https://api.dicebear.com/5.x/initials/svg?seed=${fullName} .`,
     };
-    const response = await user.create(payload);
+    const response = await User.create(payload);
 
     if (!response) {
       return res.status(400).json({
@@ -99,108 +107,108 @@ export const login = async (req, res) => {
         message: "All fields are required",
       });
     }
-    const user = await user.findOne({ email });
+    const user = await User.findOne({ email:email });
     if (!user) {
       return res.status(400).json({
         success: false,
         message: "user not found , please Signup first",
       });
     }
-    const ispasswordCorrect = await bcrypt.compare(user.password, password);
+    const ispasswordCorrect = await bcrypt.compare( password,user.password,);
+    console.log(ispasswordCorrect)
+
     if (!ispasswordCorrect) {
       return res.status(400).json({
         success: false,
         message: "Incorrect password",
       });
-    }
-    else{
+    } else {
+
       const payload = {
-         email:user.email,
-         _id : user._id
-      }
-      const Token = jwt.sign(payload,process.env.JET_SECRET,{
-         expiresIn : "2h",
-      })
+        email: user.email,
+        _id: user._id,
+      };
+      const Token = jwt.sign(payload, process.env.JWT_SECRET, {
+        expiresIn: "2h",
+      });
       user.token = Token;
       user.password = undefined;
 
       const options = {
-         expires : new Date(Date.now()+ 3 * 24 * 60 * 60 * 1000),
-         httpOnly: true,
-         sameSite: "strict", // CSRF attacks cross-site request forgery attacks
-         secure: process.env.NODE_ENV !== "development",
-      }
+        expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+        httpOnly: true,
+        sameSite: "strict", // CSRF attacks cross-site request forgery attacks
+        secure: process.env.NODE_ENV !== "development",
+      };
 
-      res.cookie("token",Token,options).status(200).json({
-         success:true,
-         Token,
-         data:user,
-         message:"Login Successfull"
-      })
-   }
+      res.cookie("token", Token, options).status(200).json({
+        success: true,
+        Token,
+        data: user,
+        message: "Login Successfull",
+      });
+    }
   } catch (e) {
-   console.log(e);
-   return res.status(500).json({
-      success:false,
-      message:"Error in Login controller"
-   })
+    console.log(e);
+    return res.status(500).json({
+      success: false,
+      message: "Error in Login controller",
+    });
   }
 };
 
+export const logout = async (req, res) => {
+  try {
+    res.cookie("token", "", { maxAge: 0 });
+    res.status(200).json({
+      success: true,
+      message: "Logged out successfully",
+    });
+  } catch (e) {
+    console.log(e);
+    return res.status(500).json({
+      success: false,
+      message: "Error in Logout controller",
+    });
+  }
+};
 
-export const logout=async (req,res)=>{
-   try{
-      res.cookie("token","",{maxAge:0});
-      res.status(200).json({
-         success:true,
-         message:"Logged out successfully",
-      })
-   }
-   catch(e){
-      console.log(e);
-      return res.status(500).json({
-         success:false,
-         message:"Error in Logout controller"
-      })
-   }
-}
+export const updateProfile = async (req, res) => {
+  try {
+    const  {profilePic}  = req.body;
+    console.log(profilePic)
+    console.log("profile wala")
+    const userId = req.user._id;
+    console.log(userId)
+    if (!profilePic) {
+      return res.status(400).json({
+        success: false,
+        message: "Profile Pic is required",
+      });
+    }
 
-
-export const updateProfile = async (req,res)=>{
-   try{
-      const {profilePic} = req.body;
-      const userId = req.user._id;
-      if(!profilePic){
-         return res.status(400).json({
-            success:false,
-            message:"Profile Pic is required"
-         })
-      }
-
-      const uploadResponse = await cloudinary.uploader.upload(profilePic);
-      const updateduser = await user.findByIdAndUpdat(
-         userId,
-         {
-            image:uploadResponse.secure_url,
-         },
-         {new:true}
-      )
-      return req.status(200).json({
-         success:true,
-         message:"profile pic updated successfully",
-         data:updateduser
-      })
-
-   }
-   catch(e){
-      console.log(e)
-      return res.status(500).json({
-         success:false,
-         message:"error in updateProfile"
-      })
-   }
-}
-
+    const uploadResponse = await cloudinary.uploader.upload(profilePic);
+    console.log(uploadResponse)
+    const updateduser = await User.findByIdAndUpdate(
+      userId,
+      {
+        image: uploadResponse.secure_url,
+      },
+      { new: true }
+    );
+    return req.status(200).json({
+      success: true,
+      message: "profile pic updated successfully",
+      data: updateduser,
+    });
+  } catch (e) {
+    console.log(e);
+    return res.status(500).json({
+      success: false,
+      message: "error in updateProfile",
+    });
+  }
+};
 
 export const checkAuth = (req, res) => {
   try {
@@ -211,49 +219,48 @@ export const checkAuth = (req, res) => {
   }
 };
 
+export const sendOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
 
-
-export const sendOtp = async(req,res)=>{
-   try{
-      const {email} = req.body;
-
-      const user = await user.findOne({email:email});
-      if(user) {
-         return res.status(400).json({
-            success:false,
-            message:"user already registerd",
-         })
-      }
-      var otp = otpGenerator.generate(6,{
-         upperCaseAlphabet:false,
-         lowerCaseAlphabet:false,
-         specialChars:false,
-      })
-
-      const result = await otp.findOne({otp:otp});
-
-      if(result){
-         var otp = otpGenerator.generate(6,{
-            upperCaseAlphabet:false,
-            lowerCaseAlphabet:false,
-            specialChars:false,
-         })
-
-         result = await otp.findOne({otp:otp});
-      }
-
-      const response = await otp.create({otp,email});
-      return res.status(200).json({
-         success:true,
-         otp:response,
-         message:"otp sent successfully"
-      })
-   }
-   catch(e){
-      console.log(e);
-      return res.status(500).json({
-         success: false,
-         message: e.message,
+    const user = await User.findOne({ email: email });
+    if (user) {
+      return res.status(400).json({
+        success: false,
+        message: "user already registerd",
       });
-   }
-}
+    }
+    var otp = otpGenerator.generate(6, {
+      upperCaseAlphabets: false,
+      lowerCaseAlphabets: false,
+      specialChars: false,
+      digits: true,
+    });
+
+    const result = await Otp.findOne({ otp: otp });
+
+    if (result) {
+      var otp = otpGenerator.generate(6, {
+        upperCaseAlphabets: false,
+        lowerCaseAlphabets: false,
+        specialChars: false,
+        digits: true,
+      });
+
+      result = await Otp.findOne({ otp: otp });
+    }
+
+    const response = await Otp.create({ otp, email });
+    return res.status(200).json({
+      success: true,
+      otp: response,
+      message: "otp sent successfully",
+    });
+  } catch (e) {
+    console.log(e);
+    return res.status(500).json({
+      success: false,
+      message: e.message,
+    });
+  }
+};

@@ -1,5 +1,5 @@
 
-exports.mailTamplet = (otp) => {
+const mailTamplet = (otp) => {
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -83,3 +83,5 @@ exports.mailTamplet = (otp) => {
     </html>
   `;
 };
+
+export default mailTamplet;
